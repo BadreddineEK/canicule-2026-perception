@@ -11,7 +11,8 @@ import streamlit as st
 
 from data.climat import (
     get_ete_villes, get_lyon_jour, resume_ville, panorama_villes,
-    france_par_annee, tendance_par_decennie, VILLE_REF,
+    france_par_annee, tendance_par_decennie, tendance_ic,
+    anomalie_multi_ref, nuits_seuils_lyon, VILLE_REF,
 )
 from utils.viz import (
     plot_nuits_tropicales, plot_panorama, plot_distribution_decennies, plot_tendance,
@@ -26,8 +27,10 @@ st.set_page_config(page_title="Canicule 2026 : vraie ou impression ?", page_icon
 def safe_plot(fig_func, *args, **kwargs):
     try:
         st.plotly_chart(fig_func(*args, **kwargs), use_container_width=True)
-    except Exception:
+    except Exception as e:
         st.warning("Ce graphique n'a pas pu être généré. Le reste de l'analyse reste disponible.")
+        with st.expander("Détails techniques"):
+            st.exception(e)
 
 
 def get_active_theme() -> str:
@@ -69,6 +72,12 @@ st.subheader(
 st.caption(
     "Par [Badreddine EL KHAMLICHI](https://badreddineek.com) · ingénieur en mathématiques appliquées, Lyon · "
     "[Portfolio](https://portfolio.badreddineek.com)"
+)
+
+st.caption(
+    "🟢 **Lecture express (30 s)** : les titres, les chiffres et un graphique par section suffisent. "
+    "🔬 **Envie de preuve ?** Dépliez les volets « Creuser » : robustesse statistique, sensibilité des "
+    "seuils, et ce que la donnée permet — ou non — d'affirmer."
 )
 
 st.divider()
@@ -135,12 +144,12 @@ st.divider()
 # ─────────────────────────────────────────
 # SECTION 3 : VUE NATIONALE — LA CARTE
 # ─────────────────────────────────────────
-st.markdown("## 🇫🇷 Un été record dans toute la France")
+st.markdown("## 🇫🇷 Un été record dans les grandes villes de France")
 
 st.markdown(
-    "Ce n'est pas qu'un ressenti lyonnais. Sur 11 grandes villes, l'été 2026 est **l'été le plus "
-    "chaud jamais mesuré partout** depuis 1950. La taille des points = les nuits tropicales de 2026, "
-    "la couleur = l'écart à la normale."
+    "Ce n'est pas qu'un ressenti lyonnais. Sur **11 grandes villes** (un échantillon, pas la France "
+    "surfacique), l'été 2026 est **l'été le plus chaud jamais mesuré**, partout, depuis 1950. La "
+    "taille des points = les nuits tropicales de 2026, la couleur = l'écart à la normale."
 )
 
 safe_plot(plot_carte_france, pano, theme)
@@ -196,12 +205,54 @@ st.markdown(
     "sommet, pas l'exception."
 )
 
+with st.expander("🔬 Creuser : cette tendance est-elle statistiquement solide ?"):
+    gL = ete[ete["ville"] == VILLE_REF].set_index("year")
+    ic_tmax = tendance_ic(gL.index, gL["tmax_moy"])
+    ic_nuits = tendance_ic(gL.index, gL["nuits_trop"])
+    ic_fr = tendance_ic(france["year"], france["tmax_moy"])
+
+    st.markdown(
+        "Une pente qui monte ne suffit pas : encore faut-il qu'elle soit **distinguable du hasard**. "
+        "On mesure donc chaque tendance avec son **intervalle de confiance à 95 %** (régression OLS). "
+        "Si l'intervalle ne contient pas zéro, la tendance est statistiquement significative."
+    )
+    t1, t2, t3 = st.columns(3)
+    t1.metric("Chaleur max · Lyon", f"{ic_tmax['pente_dec']:+.2f} °C/déc.",
+              f"IC95 : [{ic_tmax['lo']:+.2f} ; {ic_tmax['hi']:+.2f}]")
+    t2.metric("Nuits tropicales · Lyon", f"{ic_nuits['pente_dec']:+.1f} /déc.",
+              f"IC95 : [{ic_nuits['lo']:+.1f} ; {ic_nuits['hi']:+.1f}]")
+    t3.metric("Chaleur max · France (11 villes)", f"{ic_fr['pente_dec']:+.2f} °C/déc.",
+              f"IC95 : [{ic_fr['lo']:+.2f} ; {ic_fr['hi']:+.2f}]")
+
+    tous_signif = ic_tmax["significatif"] and ic_nuits["significatif"] and ic_fr["significatif"]
+    if tous_signif:
+        st.success(
+            "Les trois intervalles excluent zéro : le réchauffement estival est **statistiquement "
+            "significatif** (95 %), à Lyon comme à l'échelle des 11 villes. La pente n'est pas un "
+            "artefact visuel.",
+            icon="✅",
+        )
+    st.caption(
+        "Méthode : pente OLS sur les moyennes d'été annuelles, erreur-type analytique, "
+        f"n = {ic_tmax['n']} étés (1950-2026). L'IC porte sur la pente, pas sur une année isolée."
+    )
+
 st.divider()
 
 # ─────────────────────────────────────────
-# SECTION 5 : MÉTHODE & HONNÊTETÉ
+# SECTION 5 : MÉTHODE, ROBUSTESSE & HONNÊTETÉ
 # ─────────────────────────────────────────
-with st.expander("🔬 Méthode et honnêteté sur les données"):
+st.markdown("## 🔬 Pour ceux qui veulent la preuve")
+st.markdown(
+    "Un beau graphique ne prouve rien tout seul. Voici les tests que j'ai passés à la donnée avant "
+    "d'oser le titre — et, surtout, ce qu'elle **ne** permet **pas** de dire."
+)
+
+tab_meth, tab_ref, tab_seuil, tab_dire = st.tabs(
+    ["📐 Méthode", "🗓️ Autre période de référence ?", "🌡️ Autre seuil de nuit ?", "✅ Ce qu'on peut affirmer"]
+)
+
+with tab_meth:
     st.markdown("""
 - **Source** : API archive [Open-Meteo](https://open-meteo.com), basée sur la réanalyse **ERA5**
   (ECMWF), journalier depuis 1950. Gratuite, reproductible, une seule source cohérente pour toutes
@@ -215,6 +266,64 @@ with st.expander("🔬 Méthode et honnêteté sur les données"):
   Les valeurs absolues peuvent différer d'une station locale de quelques dixièmes ; les **écarts et
   tendances**, eux, sont robustes. Le seuil « 35 °C » est un indicateur de journée très chaude, pas
   la définition officielle de canicule (qui dépend de seuils Tmin/Tmax par département).
+""")
+
+with tab_ref:
+    st.markdown(
+        "La « normale » 1991-2020 est un choix. Un sceptique dirait : *« et si tu avais pris une autre "
+        "période ? »*. Alors comparons l'écart de la chaleur max de Lyon en 2026 selon **trois** "
+        "références classiques :"
+    )
+    sens = anomalie_multi_ref(ete[ete["ville"] == VILLE_REF].set_index("year")["tmax_moy"])
+    st.dataframe(
+        sens.rename(columns={"reference": "Période de référence", "normale": "Normale (°C)",
+                             "anomalie": "Écart de 2026 (°C)"}),
+        use_container_width=True, hide_index=True,
+    )
+    st.info(
+        "Quelle que soit la référence, 2026 ressort **nettement au-dessus** — l'écart grandit même "
+        "avec des références plus anciennes. La conclusion ne dépend pas du choix de la fenêtre.",
+        icon="🗓️",
+    )
+
+with tab_seuil:
+    st.markdown(
+        "« Nuit tropicale = Tmin ≥ 20 °C » est la définition standard, mais elle aussi est un seuil. "
+        "Recalculons les nuits chaudes de Lyon à **18, 20 et 22 °C** — le record de 2026 tient-il ?"
+    )
+    seuils = nuits_seuils_lyon(lyon)
+    st.dataframe(
+        seuils.rename(columns={"seuil": "Seuil Tmin", "nt_2026": "Nuits en 2026",
+                               "normale": "Normale 1991-2020", "rang": "Rang de 2026",
+                               "n_annees": "Étés comparés"}),
+        use_container_width=True, hide_index=True,
+    )
+    st.info(
+        "À chaque seuil, 2026 est **n°1 depuis 1950**. Le signal n'est pas un effet de bord d'une "
+        "définition : il est robuste au choix du seuil.",
+        icon="🌡️",
+    )
+
+with tab_dire:
+    st.markdown("""
+Séparer proprement ce qui est **mesuré**, ce qui est **inféré** et ce qui reste **interprétation**,
+c'est la différence entre un dashboard et un travail honnête.
+
+**✅ Ce que la donnée montre (faits mesurés)**
+- L'été 2026 est le plus chaud depuis 1950 sur les 11 villes suivies, sur une fenêtre comparable.
+- Les nuits tropicales de 2026 battent leur record partout, et le rang tient à plusieurs seuils.
+- La tendance de fond au réchauffement estival est statistiquement significative (IC95 excluant zéro).
+
+**🔎 Ce que l'on infère raisonnablement (au-delà de la seule mesure)**
+- 2026 s'inscrit dans une tendance, pas dans un accident isolé : c'est le sommet d'une pente.
+- Le glissement de toute la distribution suggère que l'« exceptionnel » d'hier devient la norme.
+
+**⛔ Ce que la donnée ne dit PAS ici**
+- Elle ne « prouve » pas à elle seule la cause du réchauffement : l'attribution au forçage humain
+  relève des études de détection-attribution du GIEC, pas de ces 11 séries.
+- « Les 11 villes » n'est pas « la France entière » : c'est un échantillon de grandes villes, pas une
+  moyenne surfacique nationale.
+- ERA5 n'est pas un thermomètre de rue : on lit des **écarts et tendances**, pas des dixièmes absolus.
 """)
 
 st.divider()

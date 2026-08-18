@@ -12,6 +12,8 @@ Un dashboard Streamlit qui tranche une question que tout le monde s'est posée c
 - **Accident ou tendance ?** : pente de fond (°C / décennie) et glissement de toute la distribution des températures.
 - **Le pont** vers le chapitre 2 : l'îlot de chaleur urbain de Lyon, au grain de la rue.
 
+> 🟢 **Deux lectures, sans alourdir** : titres + chiffres + un graphique par section pour la version express ; volets « Creuser » (robustesse statistique, sensibilité des seuils, frontière faits/interprétation) pour ceux qui veulent la preuve.
+
 ## 📊 Données & méthode
 
 - **Source** : API archive [Open-Meteo](https://open-meteo.com), réanalyse **ERA5** (ECMWF), journalier depuis 1950. Gratuite, reproductible, une seule source cohérente pour toutes les années.

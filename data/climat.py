@@ -43,6 +43,7 @@ def get_lyon_jour() -> pd.DataFrame:
     d = pd.read_csv(_LYON, encoding="utf-8", parse_dates=["time"])
     d["year"] = d["time"].dt.year
     d["month"] = d["time"].dt.month
+    d["day"] = d["time"].dt.day
     return d
 
 
@@ -59,6 +60,75 @@ def tendance_par_decennie(years, values) -> float:
         return 0.0
     a, _ = np.polyfit(years, values, 1)
     return float(a * 10)
+
+
+def tendance_ic(years, values) -> dict:
+    """Pente linéaire par décennie AVEC intervalle de confiance à 95 %.
+
+    On mesure la pente d'une régression OLS et l'incertitude sur cette pente
+    (erreur-type analytique). Sert à dire honnêtement si la tendance est
+    statistiquement distinguable de zéro, pas seulement « visuellement montante ».
+    """
+    x = np.asarray(years, dtype=float)
+    y = np.asarray(values, dtype=float)
+    n = len(x)
+    if n < 3:
+        return {"pente_dec": 0.0, "lo": 0.0, "hi": 0.0, "significatif": False, "n": int(n)}
+    a, b = np.polyfit(x, y, 1)
+    resid = y - (a * x + b)
+    sse = float(np.sum(resid ** 2))
+    sxx = float(np.sum((x - x.mean()) ** 2))
+    # erreur-type de la pente ; t*≈1.98 pour ~75 degrés de liberté (95 %)
+    se = np.sqrt((sse / (n - 2)) / sxx) if sxx > 0 else 0.0
+    t = 1.98
+    lo, hi = (a - t * se) * 10, (a + t * se) * 10
+    return {
+        "pente_dec": a * 10,
+        "lo": lo,
+        "hi": hi,
+        "significatif": bool(lo > 0 or hi < 0),
+        "n": int(n),
+    }
+
+
+def anomalie_multi_ref(serie_par_annee: pd.Series, annee: int = ANNEE_COURANTE) -> pd.DataFrame:
+    """Écart de l'année courante à la « normale », selon 3 périodes de référence.
+
+    Test de robustesse : la conclusion (« bien au-dessus de la normale ») ne doit
+    pas dépendre du choix arbitraire de la fenêtre de référence.
+    """
+    v = float(serie_par_annee.loc[annee])
+    fenetres = {"1961-1990": (1961, 1990), "1981-2010": (1981, 2010), "1991-2020": (1991, 2020)}
+    rows = []
+    for label, (a, b) in fenetres.items():
+        base = float(serie_par_annee.loc[a:b].mean())
+        rows.append({"reference": label, "normale": round(base, 1), "anomalie": round(v - base, 1)})
+    return pd.DataFrame(rows)
+
+
+def nuits_seuils_lyon(lyon_jour: pd.DataFrame, seuils=(18, 20, 22), ville_annee: int = ANNEE_COURANTE) -> pd.DataFrame:
+    """Recalcule les nuits chaudes de Lyon pour plusieurs seuils de Tmin.
+
+    Test de robustesse : le rang record de 2026 tient-il si on change la
+    définition (18, 20 ou 22 °C) ? Calcul direct sur les Tmin journalières,
+    sur la même fenêtre comparable (1er juin → 17 août).
+    """
+    d = lyon_jour[
+        (lyon_jour["month"].isin([6, 7]))
+        | ((lyon_jour["month"] == 8) & (lyon_jour["day"] <= 17))
+    ]
+    rows = []
+    for s in seuils:
+        cnt = d.assign(nt=(d["tmin"] >= s)).groupby("year")["nt"].sum()
+        val = int(cnt.loc[ville_annee])
+        rows.append({
+            "seuil": f"≥ {s} °C",
+            "nt_2026": val,
+            "normale": round(float(cnt.loc[NORM_DEBUT:NORM_FIN].mean()), 1),
+            "rang": int((cnt > val).sum()) + 1,
+            "n_annees": int(cnt.index.nunique()),
+        })
+    return pd.DataFrame(rows)
 
 
 def rang_annee(serie_par_annee: pd.Series, annee: int = ANNEE_COURANTE) -> int:
