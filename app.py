@@ -3,19 +3,22 @@ App Streamlit — Canicule 2026 : vraie ou impression ?
 
 On part d'une sensation (« il a fait anormalement chaud, surtout la nuit ») et on la
 tranche avec la donnée : nuits tropicales, écart à la normale 1991-2020, tendance de
-fond. Données ouvertes Open-Meteo (réanalyse ERA5), 1950 → 2026. Zéro modèle, que des
-faits mesurés.
+fond, à Lyon, dans ta ville et à l'échelle de la France. Données ouvertes Open-Meteo
+(réanalyse ERA5), 1950 → 2026. Zéro modèle, que des faits mesurés.
 """
 
 import streamlit as st
 
 from data.climat import (
     get_ete_villes, get_lyon_jour, resume_ville, panorama_villes,
-    tendance_par_decennie, VILLE_REF,
+    france_par_annee, tendance_par_decennie, VILLE_REF,
 )
 from utils.viz import (
     plot_nuits_tropicales, plot_panorama, plot_distribution_decennies, plot_tendance,
+    plot_carte_france, plot_france_trend,
 )
+
+ICU_URL = "https://canicule-lyon-model.streamlit.app/"
 
 st.set_page_config(page_title="Canicule 2026 : vraie ou impression ?", page_icon="🌡️", layout="wide")
 
@@ -42,11 +45,12 @@ def load():
     ete = get_ete_villes()
     lyon = get_lyon_jour()
     pano = panorama_villes(ete)
-    return ete, lyon, pano
+    france = france_par_annee(ete)
+    return ete, lyon, pano, france
 
 
 try:
-    ete, lyon, pano = load()
+    ete, lyon, pano, france = load()
 except Exception:
     st.error("Impossible de charger les données. Vérifiez `pip install -r requirements.txt`.")
     st.stop()
@@ -70,7 +74,7 @@ st.caption(
 st.divider()
 
 # ─────────────────────────────────────────
-# SECTION 1 : LA RÉPONSE, TOUT DE SUITE
+# SECTION 1 : LA RÉPONSE, TOUT DE SUITE (Lyon, héros)
 # ─────────────────────────────────────────
 r = resume_ville(ete, VILLE_REF)
 
@@ -97,57 +101,83 @@ st.info(
 st.divider()
 
 # ─────────────────────────────────────────
-# SECTION 2 : LE GRAPHIQUE QUI TRANCHE (interactif par ville)
+# SECTION 2 : ET DANS TA VILLE ? (interactif)
 # ─────────────────────────────────────────
-st.markdown("## 🌙 Les nuits qui ne rafraîchissent plus")
+st.markdown("## 🏙️ Et dans ta ville ?")
+st.markdown("Choisis ta ville : les chiffres, le graphique et la tendance s'adaptent.")
 
-ville = st.selectbox("Choisis ta ville", villes, index=villes.index(VILLE_REF))
+ville = st.selectbox("Ta ville", villes, index=villes.index(VILLE_REF), label_visibility="collapsed")
 rv = resume_ville(ete, ville)
 
-safe_plot(plot_nuits_tropicales, ete, ville, theme)
+v1, v2, v3, v4 = st.columns(4)
+v1.metric("Nuits tropicales 2026", f"{rv['nt_2026']}", f"normale : {rv['nt_normale']:.0f}")
+v2.metric("Chaleur max moyenne", f"{rv['tmax_2026']:.1f} °C", f"+{rv['tmax_anomalie']:.1f} °C")
+v3.metric("Jours ≥ 35 °C", f"{rv['jours35_2026']}", f"normale : {rv['jours35_normale']:.0f}")
+v4.metric("Rang nuits tropicales", f"{rv['nt_rang']}e / {rv['n_annees']}", "depuis 1950")
+
+col_nt, col_tr = st.columns(2)
+with col_nt:
+    safe_plot(plot_nuits_tropicales, ete, ville, theme)
+with col_tr:
+    safe_plot(plot_tendance, ete, ville, "tmax_moy", f"Chaleur estivale à {ville} : la pente de fond", theme)
 
 pente_nt = tendance_par_decennie(
     ete[ete["ville"] == ville]["year"], ete[ete["ville"] == ville]["nuits_trop"]
 )
 st.markdown(
     f"À **{ville}**, 2026 compte **{rv['nt_2026']} nuits tropicales** contre **{rv['nt_normale']:.0f}** "
-    f"en temps normal (rang {rv['nt_rang']} sur {rv['n_annees']}). La barre rouge n'est pas un pic isolé : "
-    f"la tendance monte de **{pente_nt:+.1f} nuit par décennie**. Le climat de nuit a changé, "
-    "discrètement mais massivement."
+    f"en temps normal (rang {rv['nt_rang']} sur {rv['n_annees']}). Ce n'est pas un pic isolé : "
+    f"la tendance des nuits monte de **{pente_nt:+.1f} par décennie**."
 )
 
 st.divider()
 
 # ─────────────────────────────────────────
-# SECTION 3 : PAS QU'À LYON — LE PANORAMA NATIONAL
+# SECTION 3 : VUE NATIONALE — LA CARTE
 # ─────────────────────────────────────────
-st.markdown("## 🇫🇷 Et ce n'est pas qu'un ressenti local")
+st.markdown("## 🇫🇷 Un été record dans toute la France")
 
 st.markdown(
-    "Sur 11 grandes villes françaises, l'été 2026 est **l'été le plus chaud jamais mesuré partout** "
-    "(depuis 1950). Voici l'écart à la normale 1991-2020, ville par ville :"
+    "Ce n'est pas qu'un ressenti lyonnais. Sur 11 grandes villes, l'été 2026 est **l'été le plus "
+    "chaud jamais mesuré partout** depuis 1950. La taille des points = les nuits tropicales de 2026, "
+    "la couleur = l'écart à la normale."
 )
 
-safe_plot(plot_panorama, pano, theme)
+safe_plot(plot_carte_france, pano, theme)
 
 n_record_nt = int((pano["nt_rang"] == 1).sum())
+top3 = pano.head(3)
 st.markdown(
-    f"Partout, entre **+4 et +6 °C** au-dessus de la normale sur la température max moyenne de l'été. "
-    f"Et **{n_record_nt} villes sur {len(pano)}** battent aussi leur record de nuits tropicales. "
-    "Quand tout un pays bat ses records le même été, ce n'est plus une impression."
+    f"Partout **+4 à +6 °C** au-dessus de la normale, et **{n_record_nt} villes sur {len(pano)}** "
+    f"battent aussi leur record de nuits tropicales. Les plus fortes anomalies : "
+    f"**{top3.iloc[0]['ville']}** (+{top3.iloc[0]['anomalie_tmax']:.1f} °C), "
+    f"**{top3.iloc[1]['ville']}** (+{top3.iloc[1]['anomalie_tmax']:.1f} °C), "
+    f"**{top3.iloc[2]['ville']}** (+{top3.iloc[2]['anomalie_tmax']:.1f} °C)."
 )
+
+with st.expander("📊 Voir le détail ville par ville"):
+    safe_plot(plot_panorama, pano, theme)
+    st.dataframe(
+        pano.rename(columns={
+            "ville": "Ville", "anomalie_tmax": "Écart °C", "nt_2026": "Nuits trop. 2026",
+            "nt_normale": "Normale", "tmax_rang": "Rang chaleur", "nt_rang": "Rang nuits",
+        })[["Ville", "Écart °C", "Nuits trop. 2026", "Normale", "Rang chaleur", "Rang nuits"]],
+        use_container_width=True, hide_index=True,
+    )
 
 st.divider()
 
 # ─────────────────────────────────────────
-# SECTION 4 : UN ACCIDENT OU UNE TENDANCE ?
+# SECTION 4 : ACCIDENT OU TENDANCE ?
 # ─────────────────────────────────────────
 st.markdown("## 📈 Un pic isolé, ou une tendance de fond ?")
 
 st.markdown(
     "La vraie question honnête : 2026 est-il un accident, ou le sommet d'une pente ? "
-    "Les deux graphiques ci-dessous regardent Lyon sur 76 ans."
+    "À l'échelle nationale comme à Lyon, la réponse est la même."
 )
+
+safe_plot(plot_france_trend, france, theme)
 
 col_a, col_b = st.columns(2)
 with col_a:
@@ -161,7 +191,7 @@ pente_tmax = tendance_par_decennie(
 )
 st.markdown(
     f"La chaleur estivale à Lyon grimpe de **{pente_tmax:+.2f} °C par décennie**. Décennie après "
-    "décennie, toute la distribution glisse vers le haut : ce ne sont pas seulement les records qui "
+    "décennie, toute la distribution glisse vers le haut : ce n'est pas seulement les records qui "
     "montent, c'est le « normal » lui-même qui devient ce qui était exceptionnel avant. 2026 est le "
     "sommet, pas l'exception."
 )
@@ -192,16 +222,14 @@ st.divider()
 # ─────────────────────────────────────────
 # SECTION 6 : LE PONT VERS LE CHAPITRE 2 (projet ICU)
 # ─────────────────────────────────────────
-st.markdown("## 🏙️ Et dans la ville, ça se joue rue par rue")
+st.markdown("## 🏘️ Et dans la ville, ça se joue rue par rue")
 
 st.markdown(
     "Si la nuit ne rafraîchit plus, tout le monde n'est pas logé à la même enseigne : à quelques "
     "centaines de mètres près, un quartier dense peut rester bien plus chaud qu'un parc voisin. "
     "C'est le sujet du chapitre 2, à l'échelle de l'îlot à Lyon :"
 )
-st.markdown(
-    "👉 **[Îlot de chaleur urbain à Lyon — le détail au grain fin](https://canicule-lyon-icu-model.streamlit.app/)**"
-)
+st.markdown(f"👉 **[Îlot de chaleur urbain à Lyon — le détail au grain fin]({ICU_URL})**")
 
 st.divider()
 

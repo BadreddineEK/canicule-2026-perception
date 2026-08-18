@@ -135,3 +135,55 @@ def plot_tendance(ete: pd.DataFrame, ville: str = "Lyon", col: str = "tmax_moy",
         showlegend=False,
     )
     return _apply_theme(fig, height=400, theme=theme)
+
+
+@st.cache_data(show_spinner=False)
+def plot_carte_france(pano: pd.DataFrame, theme: str = "light") -> go.Figure:
+    """Carte de France : chaque ville, taille = nuits tropicales 2026, couleur = écart à la normale."""
+    p = _palette(theme)
+    map_style = "carto-positron" if theme == "light" else "carto-darkmatter"
+    d = pano.dropna(subset=["lat", "lon"])
+
+    fig = go.Figure(go.Scattermapbox(
+        lat=d["lat"], lon=d["lon"], mode="markers+text",
+        marker=dict(
+            size=d["nt_2026"] / 2 + 9,
+            color=d["anomalie_tmax"], colorscale="OrRd", cmin=3,
+            colorbar=dict(title="Écart<br>°C"),
+            opacity=0.9,
+        ),
+        text=d["ville"], textposition="top center", textfont=dict(size=11, color=p["font"]),
+        customdata=d[["anomalie_tmax", "nt_2026", "nt_normale"]],
+        hovertemplate=("<b>%{text}</b><br>+%{customdata[0]:.1f} °C vs normale<br>"
+                       "%{customdata[1]} nuits tropicales (normale %{customdata[2]:.0f})<extra></extra>"),
+    ))
+    fig.update_layout(
+        title="Été 2026 en France — écart à la normale et nuits tropicales",
+        mapbox=dict(style=map_style, center=dict(lat=46.6, lon=2.6), zoom=4.5),
+        height=560, margin=dict(l=10, r=10, t=70, b=10),
+        paper_bgcolor=p["bg"], font=dict(color=p["font"], size=13), title_font=dict(size=16),
+        hoverlabel=dict(font_size=13),
+    )
+    return fig
+
+
+@st.cache_data(show_spinner=False)
+def plot_france_trend(france: pd.DataFrame, theme: str = "light") -> go.Figure:
+    """Nuits tropicales moyennes des 11 villes, année par année : la vue France entière."""
+    g = france.sort_values("year")
+    norm = float(g[(g["year"] >= 1991) & (g["year"] <= 2020)]["nuits_trop"].mean())
+    colors = [COLOR_2026 if y == 2026 else COLOR_BAR for y in g["year"]]
+
+    fig = go.Figure(go.Bar(
+        x=g["year"], y=g["nuits_trop"], marker_color=colors,
+        hovertemplate="%{x}<br>%{y:.1f} nuits (moyenne 11 villes)<extra></extra>",
+    ))
+    fig.add_hline(
+        y=norm, line_dash="dash", line_color=COLOR_NORMALE,
+        annotation_text=f"Normale 1991-2020 : {norm:.0f}", annotation_position="top left",
+    )
+    fig.update_layout(
+        title="Nuits tropicales en France (moyenne de 11 grandes villes)",
+        xaxis_title=None, yaxis_title="Nombre de nuits",
+    )
+    return _apply_theme(fig, height=400, theme=theme)

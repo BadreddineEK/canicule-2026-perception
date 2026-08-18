@@ -19,6 +19,21 @@ VILLE_REF = "Lyon"
 ANNEE_COURANTE = 2026
 NORM_DEBUT, NORM_FIN = 1991, 2020
 
+# Coordonnées des villes (pour la carte de France)
+VILLES_COORDS = {
+    "Lyon": (45.75, 4.85),
+    "Paris": (48.8566, 2.3522),
+    "Marseille": (43.2965, 5.3698),
+    "Toulouse": (43.6045, 1.4440),
+    "Bordeaux": (44.8378, -0.5792),
+    "Nice": (43.7102, 7.2620),
+    "Nantes": (47.2184, -1.5536),
+    "Strasbourg": (48.5734, 7.7521),
+    "Lille": (50.6292, 3.0573),
+    "Montpellier": (43.6108, 3.8767),
+    "Rennes": (48.1173, -1.6778),
+}
+
 
 def get_ete_villes() -> pd.DataFrame:
     return pd.read_csv(_ETE, encoding="utf-8")
@@ -74,8 +89,11 @@ def panorama_villes(ete: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for ville, g in ete.groupby("ville"):
         g = g.set_index("year")
+        lat, lon = VILLES_COORDS.get(ville, (None, None))
         rows.append({
             "ville": ville,
+            "lat": lat,
+            "lon": lon,
             "anomalie_tmax": round(g.loc[ANNEE_COURANTE, "tmax_moy"] - normale(g["tmax_moy"]), 1),
             "nt_2026": int(g.loc[ANNEE_COURANTE, "nuits_trop"]),
             "nt_normale": round(normale(g["nuits_trop"]), 1),
@@ -83,3 +101,15 @@ def panorama_villes(ete: pd.DataFrame) -> pd.DataFrame:
             "nt_rang": rang_annee(g["nuits_trop"]),
         })
     return pd.DataFrame(rows).sort_values("anomalie_tmax", ascending=False).reset_index(drop=True)
+
+
+def france_par_annee(ete: pd.DataFrame) -> pd.DataFrame:
+    """Moyenne nationale (des villes suivies) par année : la vue France entière."""
+    f = ete.groupby("year").agg(
+        nuits_trop=("nuits_trop", "mean"),
+        tmax_moy=("tmax_moy", "mean"),
+    ).reset_index()
+    f["nuits_trop"] = f["nuits_trop"].round(1)
+    f["tmax_moy"] = f["tmax_moy"].round(2)
+    f["ville"] = "France (11 villes)"
+    return f
