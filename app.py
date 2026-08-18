@@ -23,10 +23,17 @@ ICU_URL = "https://canicule-lyon-model.streamlit.app/"
 
 st.set_page_config(page_title="Canicule 2026 : vraie ou impression ?", page_icon="🌡️", layout="wide")
 
+# Compteur remis à zéro à chaque rerun (le script se réexécute de haut en bas) :
+# garantit une clé unique par graphique et évite StreamlitDuplicateElementId
+# quand deux sections affichent un graphique identique (ex. la tendance de Lyon).
+_PLOT_SEQ = {"n": 0}
+
 
 def safe_plot(fig_func, *args, **kwargs):
+    _PLOT_SEQ["n"] += 1
     try:
-        st.plotly_chart(fig_func(*args, **kwargs), use_container_width=True)
+        st.plotly_chart(fig_func(*args, **kwargs), use_container_width=True,
+                        key=f"chart_{_PLOT_SEQ['n']}")
     except Exception as e:
         st.warning("Ce graphique n'a pas pu être généré. Le reste de l'analyse reste disponible.")
         with st.expander("Détails techniques"):

@@ -113,10 +113,12 @@ def nuits_seuils_lyon(lyon_jour: pd.DataFrame, seuils=(18, 20, 22), ville_annee:
     définition (18, 20 ou 22 °C) ? Calcul direct sur les Tmin journalières,
     sur la même fenêtre comparable (1er juin → 17 août).
     """
-    d = lyon_jour[
-        (lyon_jour["month"].isin([6, 7]))
-        | ((lyon_jour["month"] == 8) & (lyon_jour["day"] <= 17))
-    ]
+    d = lyon_jour.copy()
+    # On dérive year/month/day depuis `time` pour ne dépendre d'aucune colonne
+    # pré-calculée (robuste à un cache Streamlit obsolète).
+    t = pd.to_datetime(d["time"])
+    d["year"], d["month"], d["day"] = t.dt.year, t.dt.month, t.dt.day
+    d = d[(d["month"].isin([6, 7])) | ((d["month"] == 8) & (d["day"] <= 17))]
     rows = []
     for s in seuils:
         cnt = d.assign(nt=(d["tmin"] >= s)).groupby("year")["nt"].sum()
