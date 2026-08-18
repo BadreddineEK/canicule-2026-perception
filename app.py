@@ -23,6 +23,22 @@ ICU_URL = "https://canicule-lyon-model.streamlit.app/"
 
 st.set_page_config(page_title="Canicule 2026 : vraie ou impression ?", page_icon="🌡️", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetric"] {
+        background: rgba(192, 57, 43, 0.06);
+        border: 1px solid rgba(192, 57, 43, 0.18);
+        border-radius: 12px;
+        padding: 12px 16px;
+    }
+    [data-testid="stMetricValue"] { font-weight: 700; }
+    [data-testid="stMetricLabel"] { opacity: 0.85; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Compteur remis à zéro à chaque rerun (le script se réexécute de haut en bas) :
 # garantit une clé unique par graphique et évite StreamlitDuplicateElementId
 # quand deux sections affichent un graphique identique (ex. la tendance de Lyon).
@@ -131,11 +147,7 @@ v2.metric("Chaleur max moyenne", f"{rv['tmax_2026']:.1f} °C", f"+{rv['tmax_anom
 v3.metric("Jours ≥ 35 °C", f"{rv['jours35_2026']}", f"normale : {rv['jours35_normale']:.0f}")
 v4.metric("Rang nuits tropicales", f"{rv['nt_rang']}e / {rv['n_annees']}", "depuis 1950")
 
-col_nt, col_tr = st.columns(2)
-with col_nt:
-    safe_plot(plot_nuits_tropicales, ete, ville, theme)
-with col_tr:
-    safe_plot(plot_tendance, ete, ville, "tmax_moy", f"Chaleur estivale à {ville} : la pente de fond", theme)
+safe_plot(plot_nuits_tropicales, ete, ville, theme)
 
 pente_nt = tendance_par_decennie(
     ete[ete["ville"] == ville]["year"], ete[ete["ville"] == ville]["nuits_trop"]
@@ -163,8 +175,9 @@ safe_plot(plot_carte_france, pano, theme)
 
 n_record_nt = int((pano["nt_rang"] == 1).sum())
 top3 = pano.head(3)
+a_lo, a_hi = pano["anomalie_tmax"].min(), pano["anomalie_tmax"].max()
 st.markdown(
-    f"Partout **+4 à +6 °C** au-dessus de la normale, et **{n_record_nt} villes sur {len(pano)}** "
+    f"Partout **+{a_lo:.0f} à +{a_hi:.0f} °C** au-dessus de la normale, et **{n_record_nt} villes sur {len(pano)}** "
     f"battent aussi leur record de nuits tropicales. Les plus fortes anomalies : "
     f"**{top3.iloc[0]['ville']}** (+{top3.iloc[0]['anomalie_tmax']:.1f} °C), "
     f"**{top3.iloc[1]['ville']}** (+{top3.iloc[1]['anomalie_tmax']:.1f} °C), "
