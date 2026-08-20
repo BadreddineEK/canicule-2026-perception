@@ -204,7 +204,7 @@ with st.expander("📊 Voir le détail ville par ville"):
             "ville": "Ville", "anomalie_tmax": "Écart °C", "nt_2026": "Nuits trop. 2026",
             "nt_normale": "Normale", "tmax_rang": "Rang chaleur", "nt_rang": "Rang nuits",
         })[["Ville", "Écart °C", "Nuits trop. 2026", "Normale", "Rang chaleur", "Rang nuits"]],
-        use_container_width=True, hide_index=True,
+        width='stretch', hide_index=True,
     )
 
 st.divider()
@@ -311,7 +311,7 @@ with tab_ref:
     st.dataframe(
         sens.rename(columns={"reference": "Période de référence", "normale": "Normale (°C)",
                              "anomalie": "Écart de 2026 (°C)"}),
-        use_container_width=True, hide_index=True,
+        width='stretch', hide_index=True,
     )
     st.info(
         "Quelle que soit la référence, 2026 ressort **nettement au-dessus** — l'écart grandit même "
@@ -329,7 +329,7 @@ with tab_seuil:
         seuils.rename(columns={"seuil": "Seuil Tmin", "nt_2026": "Nuits en 2026",
                                "normale": "Normale 1991-2020", "rang": "Rang de 2026",
                                "n_annees": "Étés comparés"}),
-        use_container_width=True, hide_index=True,
+        width='stretch', hide_index=True,
     )
     st.info(
         "À chaque seuil, 2026 est **n°1 depuis 1950**. Le signal n'est pas un effet de bord d'une "

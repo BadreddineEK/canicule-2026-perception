@@ -144,7 +144,7 @@ def plot_carte_france(pano: pd.DataFrame, theme: str = "light") -> go.Figure:
     map_style = "carto-positron" if theme == "light" else "carto-darkmatter"
     d = pano.dropna(subset=["lat", "lon"])
 
-    fig = go.Figure(go.Scattermapbox(
+    fig = go.Figure(go.Scattermap(
         lat=d["lat"], lon=d["lon"], mode="markers+text",
         marker=dict(
             size=d["nt_2026"] / 2 + 9,
@@ -159,7 +159,7 @@ def plot_carte_france(pano: pd.DataFrame, theme: str = "light") -> go.Figure:
     ))
     fig.update_layout(
         title="Été 2026 en France — écart à la normale et nuits tropicales",
-        mapbox=dict(style=map_style, center=dict(lat=46.6, lon=2.6), zoom=4.5),
+        map=dict(style=map_style, center=dict(lat=46.6, lon=2.6), zoom=4.5),
         height=560, margin=dict(l=10, r=10, t=70, b=10),
         paper_bgcolor=p["bg"], font=dict(color=p["font"], size=13), title_font=dict(size=16),
         hoverlabel=dict(font_size=13),
